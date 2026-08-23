@@ -147,7 +147,14 @@ function clearGrid() {
 function savePNG() {
   const radios = document.querySelectorAll('input[name="scale"]');
   let scale = 1;
-  radios.forEach(r => { if (r.checked) scale = parseInt(r.value); });
+  radios.forEach(r => {
+    if (r.checked) {
+      scale = parseInt(r.value);
+    }
+  });
+
+  console.log('Selected scale:', scale);
+  console.log('Canvas size:', GRID_SIZE * scale, 'x', GRID_SIZE * scale);
 
   const canvas = document.createElement('canvas');
   const size = GRID_SIZE * scale;
@@ -155,6 +162,11 @@ function savePNG() {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
+  // 배경을 흰색으로 채우기
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+
+  // 픽셀 그리기
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       ctx.fillStyle = grid[r][c];
@@ -162,12 +174,15 @@ function savePNG() {
     }
   }
 
+  // 다운로드
   const link = document.createElement('a');
-  link.download = `pixel-art-${Date.now()}.png`;
+  link.download = `pixel-art-${size}x${size}-${Date.now()}.png`;
   link.href = canvas.toDataURL('image/png');
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
+  console.log('PNG saved successfully!');
 }
 
 // ===== Get Cell From Point =====
