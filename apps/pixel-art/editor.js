@@ -1,13 +1,12 @@
 // ===== State =====
 const GRID_SIZE = 16;
 let currentColor = '#000000';
-let currentTool = 'pen'; // pen, eraser, fill
+let currentTool = 'pen';
 let isDrawing = false;
-let showGrid = true;
 let history = [];
-let grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill('#ffffff'));
+let grid = [];
 
-// ===== Color Palette =====
+// ===== Colors =====
 const COLORS = [
   '#000000', '#ffffff', '#ff0000', '#00ff00',
   '#0000ff', '#ffff00', '#ff00ff', '#00ffff',
@@ -15,70 +14,62 @@ const COLORS = [
   '#845ef7', '#ff922b', '#20c997', '#e64980'
 ];
 
-// ===== DOM Elements =====
-let gridContainer, colorGridEl, colorPicker, colorPreview;
-let penBtn, eraserBtn, fillBtn, undoBtn, clearBtn, gridToggleBtn, saveBtn;
+// ===== Init Grid =====
+function initGrid() {
+  grid = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    grid[r] = [];
+    for (let c = 0; c < GRID_SIZE; c++) {
+      grid[r][c] = '#ffffff';
+    }
+  }
+}
 
-// ===== Initialize =====
-document.addEventListener('DOMContentLoaded', () => {
-  // Get DOM elements
-  gridContainer = document.getElementById('grid-container');
-  colorGridEl = document.getElementById('color-grid');
-  colorPicker = document.getElementById('color-picker');
-  colorPreview = document.getElementById('color-preview');
-  penBtn = document.getElementById('pen-btn');
-  eraserBtn = document.getElementById('eraser-btn');
-  fillBtn = document.getElementById('fill-btn');
-  undoBtn = document.getElementById('undo-btn');
-  clearBtn = document.getElementById('clear-btn');
-  gridToggleBtn = document.getElementById('grid-toggle-btn');
-  saveBtn = document.getElementById('save-btn');
-
-  createGrid();
-  createPalette();
-  updateColorPreview();
-  setupEventListeners();
-});
-
-// ===== Create Grid =====
-function createGrid() {
-  gridContainer.innerHTML = '';
+// ===== Build UI =====
+function buildUI() {
+  // Build grid
+  const container = document.getElementById('grid-container');
+  container.innerHTML = '';
 
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       const cell = document.createElement('div');
       cell.className = 'grid-cell';
-      cell.dataset.row = r;
-      cell.dataset.col = c;
-      cell.style.backgroundColor = grid[r][c];
-      gridContainer.appendChild(cell);
+      cell.id = `cell-${r}-${c}`;
+      cell.style.backgroundColor = '#ffffff';
+      container.appendChild(cell);
     }
   }
-}
 
-// ===== Create Palette =====
-function createPalette() {
-  colorGridEl.innerHTML = '';
+  // Build palette
+  const palette = document.getElementById('color-grid');
+  palette.innerHTML = '';
 
   COLORS.forEach(color => {
     const btn = document.createElement('button');
     btn.className = 'color-btn';
     btn.style.backgroundColor = color;
-    btn.dataset.color = color;
+    btn.setAttribute('data-color', color);
     if (color === currentColor) btn.classList.add('active');
-    colorGridEl.appendChild(btn);
+    palette.appendChild(btn);
   });
+
+  // Update preview
+  updateColorPreview();
 }
 
 // ===== Update Color Preview =====
 function updateColorPreview() {
-  colorPreview.style.backgroundColor = currentColor;
-  colorPicker.value = currentColor;
+  const preview = document.getElementById('color-preview');
+  const picker = document.getElementById('color-picker');
+  if (preview) preview.style.backgroundColor = currentColor;
+  if (picker) picker.value = currentColor;
 }
 
 // ===== Save History =====
 function saveHistory() {
-  history.push(grid.map(row => [...row]));
+  const snapshot = grid.map(row => [...row]);
+  history.push(snapshot);
   if (history.length > 50) history.shift();
 }
 
@@ -86,62 +77,78 @@ function saveHistory() {
 function undo() {
   if (history.length === 0) return;
   grid = history.pop();
-  renderGrid();
+  refreshGrid();
 }
 
-// ===== Render Grid =====
-function renderGrid() {
-  const cells = gridContainer.querySelectorAll('.grid-cell');
-  cells.forEach(cell => {
-    const r = parseInt(cell.dataset.row);
-    const c = parseInt(cell.dataset.col);
-    cell.style.backgroundColor = grid[r][c];
-  });
+// ===== Refresh Grid Display =====
+function refreshGrid() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      if (cell) cell.style.backgroundColor = grid[r][c];
+    }
+  }
 }
 
-// ===== Set Pixel =====
-function setPixel(r, c, color) {
+// ===== Paint Cell =====
+function paintCell(r, c) {
   if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return;
+
+  const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
   grid[r][c] = color;
-  const cell = gridContainer.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+
+  const cell = document.getElementById(`cell-${r}-${c}`);
   if (cell) cell.style.backgroundColor = color;
 }
 
 // ===== Fill Tool =====
-function fill(startR, startC, newColor) {
+function floodFill(startR, startC) {
   const targetColor = grid[startR][startC];
+  const newColor = currentColor;
+
   if (targetColor === newColor) return;
 
   const stack = [[startR, startC]];
-  const visited = new Set();
+  const visited = {};
 
   while (stack.length > 0) {
     const [r, c] = stack.pop();
     const key = `${r},${c}`;
 
-    if (visited.has(key)) continue;
+    if (visited[key]) continue;
     if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) continue;
     if (grid[r][c] !== targetColor) continue;
 
-    visited.add(key);
+    visited[key] = true;
     grid[r][c] = newColor;
 
-    stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
-  }
+    const cell = document.getElementById(`cell-${r}-${c}`);
+    if (cell) cell.style.backgroundColor = newColor;
 
-  renderGrid();
+    stack.push([r - 1, c]);
+    stack.push([r + 1, c]);
+    stack.push([r, c - 1]);
+    stack.push([r, c + 1]);
+  }
 }
 
 // ===== Clear Grid =====
 function clearGrid() {
   saveHistory();
-  grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill('#ffffff'));
-  renderGrid();
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      grid[r][c] = '#ffffff';
+    }
+  }
+  refreshGrid();
 }
 
-// ===== Save as PNG =====
+// ===== Save PNG =====
 function savePNG() {
-  const scale = parseInt(document.querySelector('input[name="scale"]:checked').value);
+  const radios = document.querySelectorAll('input[name="scale"]');
+  let scale = 1;
+  radios.forEach(r => { if (r.checked) scale = parseInt(r.value); });
+
   const canvas = document.createElement('canvas');
   const size = GRID_SIZE * scale;
   canvas.width = size;
@@ -158,126 +165,137 @@ function savePNG() {
   const link = document.createElement('a');
   link.download = `pixel-art-${Date.now()}.png`;
   link.href = canvas.toDataURL('image/png');
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }
 
-// ===== Get Cell from Event =====
-function getCellFromEvent(e) {
-  let clientX, clientY;
-
-  if (e.touches && e.touches.length > 0) {
-    clientX = e.touches[0].clientX;
-    clientY = e.touches[0].clientY;
-  } else if (e.changedTouches && e.changedTouches.length > 0) {
-    clientX = e.changedTouches[0].clientX;
-    clientY = e.changedTouches[0].clientY;
-  } else {
-    clientX = e.clientX;
-    clientY = e.clientY;
-  }
-
-  const element = document.elementFromPoint(clientX, clientY);
-  if (element && element.classList.contains('grid-cell')) {
-    return element;
+// ===== Get Cell From Point =====
+function getCellFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (el && el.classList.contains('grid-cell')) {
+    const id = el.id; // cell-R-C
+    const parts = id.split('-');
+    return { r: parseInt(parts[1]), c: parseInt(parts[2]) };
   }
   return null;
 }
 
-// ===== Handle Draw Start =====
-function handleDrawStart(e) {
-  e.preventDefault();
-  const cell = getCellFromEvent(e);
-  if (!cell) return;
+// ===== Setup Events =====
+function setupEvents() {
+  const container = document.getElementById('grid-container');
 
-  isDrawing = true;
-  const r = parseInt(cell.dataset.row);
-  const c = parseInt(cell.dataset.col);
+  // === MOUSE EVENTS ===
+  container.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    const cell = getCellFromPoint(e.clientX, e.clientY);
+    if (!cell) return;
 
-  if (currentTool === 'fill') {
+    isDrawing = true;
     saveHistory();
-    fill(r, c, currentColor);
-  } else {
+
+    if (currentTool === 'fill') {
+      floodFill(cell.r, cell.c);
+    } else {
+      paintCell(cell.r, cell.c);
+    }
+  });
+
+  container.addEventListener('mousemove', function(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    if (currentTool === 'fill') return;
+
+    const cell = getCellFromPoint(e.clientX, e.clientY);
+    if (cell) paintCell(cell.r, cell.c);
+  });
+
+  document.addEventListener('mouseup', function() {
+    isDrawing = false;
+  });
+
+  // === TOUCH EVENTS ===
+  container.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const cell = getCellFromPoint(touch.clientX, touch.clientY);
+    if (!cell) return;
+
+    isDrawing = true;
     saveHistory();
-    const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-    setPixel(r, c, color);
-  }
-}
 
-// ===== Handle Draw Move =====
-function handleDrawMove(e) {
-  e.preventDefault();
-  if (!isDrawing || currentTool === 'fill') return;
+    if (currentTool === 'fill') {
+      floodFill(cell.r, cell.c);
+    } else {
+      paintCell(cell.r, cell.c);
+    }
+  }, { passive: false });
 
-  const cell = getCellFromEvent(e);
-  if (!cell) return;
+  container.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    if (currentTool === 'fill') return;
 
-  const r = parseInt(cell.dataset.row);
-  const c = parseInt(cell.dataset.col);
-  const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-  setPixel(r, c, color);
-}
+    const touch = e.touches[0];
+    const cell = getCellFromPoint(touch.clientX, touch.clientY);
+    if (cell) paintCell(cell.r, cell.c);
+  }, { passive: false });
 
-// ===== Handle Draw End =====
-function handleDrawEnd(e) {
-  e.preventDefault();
-  isDrawing = false;
-}
+  container.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    isDrawing = false;
+  }, { passive: false });
 
-// ===== Setup Event Listeners =====
-function setupEventListeners() {
-  // Mouse events
-  gridContainer.addEventListener('mousedown', handleDrawStart);
-  gridContainer.addEventListener('mousemove', handleDrawMove);
-  document.addEventListener('mouseup', handleDrawEnd);
-
-  // Touch events
-  gridContainer.addEventListener('touchstart', handleDrawStart, { passive: false });
-  gridContainer.addEventListener('touchmove', handleDrawMove, { passive: false });
-  gridContainer.addEventListener('touchend', handleDrawEnd, { passive: false });
-  gridContainer.addEventListener('touchcancel', handleDrawEnd, { passive: false });
-
-  // Color palette
-  colorGridEl.addEventListener('click', (e) => {
+  // === COLOR PALETTE ===
+  document.getElementById('color-grid').addEventListener('click', function(e) {
     const btn = e.target.closest('.color-btn');
     if (!btn) return;
 
-    currentColor = btn.dataset.color;
+    currentColor = btn.getAttribute('data-color');
     updateColorPreview();
 
     document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
 
-  // Color picker
-  colorPicker.addEventListener('input', (e) => {
+  // === COLOR PICKER ===
+  document.getElementById('color-picker').addEventListener('input', function(e) {
     currentColor = e.target.value;
     updateColorPreview();
     document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
   });
 
-  // Tool buttons
-  penBtn.addEventListener('click', () => setTool('pen'));
-  eraserBtn.addEventListener('click', () => setTool('eraser'));
-  fillBtn.addEventListener('click', () => setTool('fill'));
-
-  // Undo
-  undoBtn.addEventListener('click', undo);
-
-  // Clear
-  clearBtn.addEventListener('click', clearGrid);
-
-  // Grid toggle
-  gridToggleBtn.addEventListener('click', () => {
-    showGrid = !showGrid;
-    gridContainer.classList.toggle('no-grid', !showGrid);
-    gridToggleBtn.classList.toggle('active', showGrid);
+  // === TOOL BUTTONS ===
+  document.getElementById('pen-btn').addEventListener('click', function() {
+    setTool('pen');
   });
 
-  // Save
-  saveBtn.addEventListener('click', savePNG);
+  document.getElementById('eraser-btn').addEventListener('click', function() {
+    setTool('eraser');
+  });
 
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
+  document.getElementById('fill-btn').addEventListener('click', function() {
+    setTool('fill');
+  });
+
+  // === UNDO ===
+  document.getElementById('undo-btn').addEventListener('click', undo);
+
+  // === CLEAR ===
+  document.getElementById('clear-btn').addEventListener('click', clearGrid);
+
+  // === GRID TOGGLE ===
+  document.getElementById('grid-toggle-btn').addEventListener('click', function() {
+    const container = document.getElementById('grid-container');
+    container.classList.toggle('no-grid');
+    this.classList.toggle('active');
+  });
+
+  // === SAVE ===
+  document.getElementById('save-btn').addEventListener('click', savePNG);
+
+  // === KEYBOARD ===
+  document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 'z') {
       e.preventDefault();
       undo();
@@ -288,7 +306,14 @@ function setupEventListeners() {
 // ===== Set Tool =====
 function setTool(tool) {
   currentTool = tool;
-  penBtn.classList.toggle('active', tool === 'pen');
-  eraserBtn.classList.toggle('active', tool === 'eraser');
-  fillBtn.classList.toggle('active', tool === 'fill');
+  document.getElementById('pen-btn').classList.toggle('active', tool === 'pen');
+  document.getElementById('eraser-btn').classList.toggle('active', tool === 'eraser');
+  document.getElementById('fill-btn').classList.toggle('active', tool === 'fill');
 }
+
+// ===== START =====
+initGrid();
+buildUI();
+setupEvents();
+
+console.log('Pixel Art Editor loaded!');

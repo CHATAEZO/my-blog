@@ -165,16 +165,18 @@ h1 {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  cursor: crosshair;
 }
 
 .grid-cell {
   width: 30px;
   height: 30px;
   background: #ffffff;
-  cursor: pointer;
+  cursor: crosshair;
   transition: background-color 0.05s;
   border: 0.5px solid var(--grid-line);
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 .grid-cell:hover {
