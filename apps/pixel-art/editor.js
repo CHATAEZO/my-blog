@@ -16,25 +16,29 @@ const COLORS = [
 ];
 
 // ===== DOM Elements =====
-const gridContainer = document.getElementById('grid-container');
-const colorGrid = document.getElementById('grid');
-const colorPicker = document.getElementById('color-picker');
-const colorPreview = document.getElementById('color-preview');
-const penBtn = document.getElementById('pen-btn');
-const eraserBtn = document.getElementById('eraser-btn');
-const fillBtn = document.getElementById('fill-btn');
-const undoBtn = document.getElementById('undo-btn');
-const clearBtn = document.getElementById('clear-btn');
-const gridToggleBtn = document.getElementById('grid-toggle-btn');
-const saveBtn = document.getElementById('save-btn');
+let gridContainer, colorGridEl, colorPicker, colorPreview;
+let penBtn, eraserBtn, fillBtn, undoBtn, clearBtn, gridToggleBtn, saveBtn;
 
 // ===== Initialize =====
-function init() {
+document.addEventListener('DOMContentLoaded', () => {
+  // Get DOM elements
+  gridContainer = document.getElementById('grid-container');
+  colorGridEl = document.getElementById('color-grid');
+  colorPicker = document.getElementById('color-picker');
+  colorPreview = document.getElementById('color-preview');
+  penBtn = document.getElementById('pen-btn');
+  eraserBtn = document.getElementById('eraser-btn');
+  fillBtn = document.getElementById('fill-btn');
+  undoBtn = document.getElementById('undo-btn');
+  clearBtn = document.getElementById('clear-btn');
+  gridToggleBtn = document.getElementById('grid-toggle-btn');
+  saveBtn = document.getElementById('save-btn');
+
   createGrid();
   createPalette();
   updateColorPreview();
   setupEventListeners();
-}
+});
 
 // ===== Create Grid =====
 function createGrid() {
@@ -54,7 +58,6 @@ function createGrid() {
 
 // ===== Create Palette =====
 function createPalette() {
-  const colorGridEl = document.getElementById('color-grid');
   colorGridEl.innerHTML = '';
 
   COLORS.forEach(color => {
@@ -76,7 +79,7 @@ function updateColorPreview() {
 // ===== Save History =====
 function saveHistory() {
   history.push(grid.map(row => [...row]));
-  if (history.length > 50) history.shift(); // Limit history
+  if (history.length > 50) history.shift();
 }
 
 // ===== Undo =====
@@ -145,7 +148,6 @@ function savePNG() {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  // Draw pixels
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       ctx.fillStyle = grid[r][c];
@@ -153,90 +155,89 @@ function savePNG() {
     }
   }
 
-  // Download
   const link = document.createElement('a');
   link.download = `pixel-art-${Date.now()}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
 }
 
+// ===== Get Cell from Event =====
+function getCellFromEvent(e) {
+  let clientX, clientY;
+
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else if (e.changedTouches && e.changedTouches.length > 0) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  const element = document.elementFromPoint(clientX, clientY);
+  if (element && element.classList.contains('grid-cell')) {
+    return element;
+  }
+  return null;
+}
+
+// ===== Handle Draw Start =====
+function handleDrawStart(e) {
+  e.preventDefault();
+  const cell = getCellFromEvent(e);
+  if (!cell) return;
+
+  isDrawing = true;
+  const r = parseInt(cell.dataset.row);
+  const c = parseInt(cell.dataset.col);
+
+  if (currentTool === 'fill') {
+    saveHistory();
+    fill(r, c, currentColor);
+  } else {
+    saveHistory();
+    const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
+    setPixel(r, c, color);
+  }
+}
+
+// ===== Handle Draw Move =====
+function handleDrawMove(e) {
+  e.preventDefault();
+  if (!isDrawing || currentTool === 'fill') return;
+
+  const cell = getCellFromEvent(e);
+  if (!cell) return;
+
+  const r = parseInt(cell.dataset.row);
+  const c = parseInt(cell.dataset.col);
+  const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
+  setPixel(r, c, color);
+}
+
+// ===== Handle Draw End =====
+function handleDrawEnd(e) {
+  e.preventDefault();
+  isDrawing = false;
+}
+
 // ===== Setup Event Listeners =====
 function setupEventListeners() {
-  // Grid interactions
-  gridContainer.addEventListener('mousedown', (e) => {
-    const cell = e.target.closest('.grid-cell');
-    if (!cell) return;
+  // Mouse events
+  gridContainer.addEventListener('mousedown', handleDrawStart);
+  gridContainer.addEventListener('mousemove', handleDrawMove);
+  document.addEventListener('mouseup', handleDrawEnd);
 
-    isDrawing = true;
-    const r = parseInt(cell.dataset.row);
-    const c = parseInt(cell.dataset.col);
-
-    if (currentTool === 'fill') {
-      saveHistory();
-      fill(r, c, currentColor);
-    } else {
-      saveHistory();
-      const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-      setPixel(r, c, color);
-    }
-  });
-
-  gridContainer.addEventListener('mousemove', (e) => {
-    if (!isDrawing || currentTool === 'fill') return;
-    const cell = e.target.closest('.grid-cell');
-    if (!cell) return;
-
-    const r = parseInt(cell.dataset.row);
-    const c = parseInt(cell.dataset.col);
-    const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-    setPixel(r, c, color);
-  });
-
-  document.addEventListener('mouseup', () => {
-    isDrawing = false;
-  });
-
-  // Touch support
-  gridContainer.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const cell = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!cell || !cell.classList.contains('grid-cell')) return;
-
-    isDrawing = true;
-    const r = parseInt(cell.dataset.row);
-    const c = parseInt(cell.dataset.col);
-
-    if (currentTool === 'fill') {
-      saveHistory();
-      fill(r, c, currentColor);
-    } else {
-      saveHistory();
-      const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-      setPixel(r, c, color);
-    }
-  });
-
-  gridContainer.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (!isDrawing || currentTool === 'fill') return;
-
-    const touch = e.touches[0];
-    const cell = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!cell || !cell.classList.contains('grid-cell')) return;
-
-    const r = parseInt(cell.dataset.row);
-    const c = parseInt(cell.dataset.col);
-    const color = currentTool === 'eraser' ? '#ffffff' : currentColor;
-    setPixel(r, c, color);
-  });
-
-  gridContainer.addEventListener('touchend', () => {
-    isDrawing = false;
-  });
+  // Touch events
+  gridContainer.addEventListener('touchstart', handleDrawStart, { passive: false });
+  gridContainer.addEventListener('touchmove', handleDrawMove, { passive: false });
+  gridContainer.addEventListener('touchend', handleDrawEnd, { passive: false });
+  gridContainer.addEventListener('touchcancel', handleDrawEnd, { passive: false });
 
   // Color palette
-  document.getElementById('color-grid').addEventListener('click', (e) => {
+  colorGridEl.addEventListener('click', (e) => {
     const btn = e.target.closest('.color-btn');
     if (!btn) return;
 
@@ -291,6 +292,3 @@ function setTool(tool) {
   eraserBtn.classList.toggle('active', tool === 'eraser');
   fillBtn.classList.toggle('active', tool === 'fill');
 }
-
-// ===== Start =====
-init();
